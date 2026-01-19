@@ -2,8 +2,7 @@ import streamlit as st
 import pandas as pd
 import json
 import os
-from datetime import datetime, date
-import plotly.express as px
+from datetime import datetime
 
 # --- 1. ตั้งค่าหน้าเว็บ ---
 st.set_page_config(page_title="Expense Tracker Pro", page_icon="💰", layout="wide")
@@ -43,6 +42,10 @@ menu = st.sidebar.radio("ไปที่หน้า:", ["📝 บันทึ�
 data = load_data()
 df = pd.DataFrame(data)
 
+# --- 🛠️ FIX: แปลงวันที่ให้เป็น Datetime Object ทันทีถ้ามีข้อมูล ---
+if not df.empty and 'date' in df.columns:
+    df['date'] = pd.to_datetime(df['date'])
+
 # --- หน้าที่ 1: บันทึกรายจ่าย ---
 if menu == "📝 บันทึกรายจ่าย":
     st.title("📝 บันทึกรายจ่ายใหม่")
@@ -73,6 +76,8 @@ if menu == "📝 บันทึกรายจ่าย":
                 data.append(new_record)
                 save_data(data)
                 st.success("✅ บันทึกเรียบร้อย!")
+                # ใช้ st.rerun() แทน experimental_rerun เพื่อรองรับเวอร์ชันใหม่
+                st.rerun()
             else:
                 st.warning("กรุณาระบุจำนวนเงิน")
 
@@ -81,8 +86,7 @@ elif menu == "📊 สรุปผล (Dashboard)":
     st.title("📊 สรุปภาพรวมการใช้เงิน")
     
     if not df.empty:
-        # แปลงข้อมูลวันที่เพื่อให้คำนวณได้
-        df['date'] = pd.to_datetime(df['date'])
+        import plotly.express as px # Import เฉพาะหน้าที่มีการใช้
         
         # ตัวกรองเดือน (Filter)
         col_filter1, col_filter2 = st.columns(2)
@@ -144,6 +148,7 @@ elif menu == "✏️ แก้ไขข้อมูล":
             num_rows="dynamic", # อนุญาตให้เพิ่ม/ลบแถวได้
             column_config={
                 "amount": st.column_config.NumberColumn("จำนวนเงิน", format="%.2f"),
+                # ตรงนี้จะไม่ error แล้ว เพราะเราแปลง df['date'] เป็น datetime ด้านบนแล้ว
                 "date": st.column_config.DateColumn("วันที่", format="YYYY-MM-DD"),
                 "category": st.column_config.SelectboxColumn("หมวดหมู่", options=list(CATEGORIES.keys())),
                 "subcategory": st.column_config.TextColumn("หมวดย่อย"),
@@ -157,9 +162,10 @@ elif menu == "✏️ แก้ไขข้อมูล":
         # ปุ่มบันทึก (สำคัญมาก)
         if st.button("💾 บันทึกการแก้ไขทั้งหมด", type="primary"):
             # แปลง DataFrame กลับเป็น List of Dict เพื่อบันทึก JSON
-            # ต้องแปลง Date Object กลับเป็น String ก่อน
             save_df = edited_df.copy()
-            save_df['date'] = save_df['date'].astype(str) 
+            
+            # **สำคัญ** แปลงวันที่กลับเป็น String (YYYY-MM-DD) ก่อนเซฟลง JSON
+            save_df['date'] = save_df['date'].apply(lambda x: x.strftime('%Y-%m-%d') if pd.notnull(x) else "")
             
             # บันทึก
             save_data(save_df.to_dict('records'))
@@ -168,4 +174,3 @@ elif menu == "✏️ แก้ไขข้อมูล":
             
     else:
         st.info("ไม่มีข้อมูลให้แก้ไข")
-
